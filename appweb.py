@@ -858,27 +858,21 @@ for i, mat in enumerate(st.session_state.mat_list):
         for m in st.session_state.mat_list:
             if m['id'] == m_id:
                 m['sys_sel'] = val
+                
+                db_diag_val = "-- None --"
                 if val not in ["-- New System --", "-- None --"]:
                     try:
-                        diag_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
-                        m['diagram'] = diag_val if pd.notna(diag_val) and diag_val != "" else "-- None --"
+                        raw_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
+                        if pd.notna(raw_val) and str(raw_val).strip() != "":
+                            db_diag_val = str(raw_val).strip()
                     except:
-                        m['diagram'] = "-- None --"
-                else:
-                    m['diagram'] = "-- None --"
-                    
+                        pass
+                
+                m['diagram'] = db_diag_val
                 m['sys_new'] = val if val not in ["-- New System --", "-- None --"] else ""
                 
                 st.session_state[f"s_d_{m_id}"] = m['diagram']
-                
-                db_diag_val = ""
-                if val not in ["-- New System --", "-- None --"]:
-                    try:
-                        db_diag_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
-                    except: pass
-                
-                is_default = (m['diagram'] == db_diag_val) and (db_diag_val != "") and (db_diag_val != "-- None --")
-                st.session_state[f"def_diag_{m_id}"] = is_default
+                st.session_state[f"def_diag_{m_id}"] = True
                 break
 
     sys_sel = c_sys1.selectbox("System:", sys_options, index=sys_idx, key=f"s_sel_{mat['id']}", on_change=sys_change_callback, args=(f"s_sel_{mat['id']}", mat['id']))
@@ -887,11 +881,10 @@ for i, mat in enumerate(st.session_state.mat_list):
         mat['sys_new'] = c_sys2.text_input("System Name:", value=mat['sys_new'], key=f"s_n_{mat['id']}", placeholder="Type new system...", autocomplete="off")
     else:
         mat['sys_new'] = mat['sys_sel']
-        c_sys2.text_input("System Name:", value=mat['sys_sel'], disabled=True, key=f"s_n_dis_{mat['id']}")
         
     def diag_change_callback(k_val, d_v, chk_key, m_id):
         val = st.session_state.get(k_val, "")
-        st.session_state[chk_key] = (val == d_v) and (d_v != "") and (d_v != "-- None --")
+        st.session_state[chk_key] = (val == d_v)
         for m in st.session_state.mat_list:
             if m['id'] == m_id:
                 m['diagram'] = val
@@ -899,16 +892,18 @@ for i, mat in enumerate(st.session_state.mat_list):
         
     def reset_diag_callback(k_val, d_v, chk_key, m_id):
         st.session_state[k_val] = d_v if d_v else "-- None --"
-        st.session_state[chk_key] = (d_v != "") and (d_v != "-- None --")
+        st.session_state[chk_key] = True
         for m in st.session_state.mat_list:
             if m['id'] == m_id:
                 m['diagram'] = st.session_state[k_val]
                 break
 
-    db_diag = ""
+    db_diag = "-- None --"
     if mat['sys_new'] and not df_sist.empty and mat['sys_new'] in df_sist['System'].values:
         try:
-            db_diag = df_sist[(df_sist['Material'] == mat['mat_name']) & (df_sist['System'] == mat['sys_new'])]['Diagram'].iloc[0]
+            raw_db = df_sist[(df_sist['Material'] == mat['mat_name']) & (df_sist['System'] == mat['sys_new'])]['Diagram'].iloc[0]
+            if pd.notna(raw_db) and str(raw_db).strip() != "":
+                db_diag = str(raw_db).strip()
         except: pass
     
     chk_diag_key = f"def_diag_{mat['id']}"
@@ -917,7 +912,7 @@ for i, mat in enumerate(st.session_state.mat_list):
         st.session_state[f"s_d_{mat['id']}"] = mat['diagram']
         
     if chk_diag_key not in st.session_state: 
-        st.session_state[chk_diag_key] = (st.session_state[f"s_d_{mat['id']}"] == db_diag) and (db_diag != "") and (db_diag != "-- None --")
+        st.session_state[chk_diag_key] = (st.session_state[f"s_d_{mat['id']}"] == db_diag)
 
     mat['diagram'] = c_sys3.selectbox("Diagram:", diagramas_disp, key=f"s_d_{mat['id']}", on_change=diag_change_callback, args=(f"s_d_{mat['id']}", db_diag, chk_diag_key, mat['id']))
     
