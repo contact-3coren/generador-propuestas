@@ -1,0 +1,5 @@
+streamlit
+gspread
+pandas
+docxtpl
+google-api-python-client
