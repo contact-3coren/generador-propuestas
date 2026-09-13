@@ -76,7 +76,7 @@ with col_logo:
     try:
         st.image("3coren Logo.png")
     except:
-        pass # Evita error si el logo no está en la nube aún
+        pass 
 
 # ==========================================
 # 2. CONEXIÓN A GOOGLE SHEETS Y DRIVE
@@ -164,7 +164,7 @@ try:
                 diagramas_disp.append(item['name'])
                 st.session_state[f"diag_id_{item['name']}"] = item['id']
 except Exception as e:
-    pass # Falla silenciosa si no hay ID o permisos, simplemente muestra "-- None --"
+    pass 
 
 def buscar_dato(fila_dict, palabra_clave, excluir=None):
     if hasattr(fila_dict, 'to_dict'): fila_dict = fila_dict.to_dict()
@@ -437,41 +437,41 @@ st.markdown("### 1. Project Basic Data")
 if st.session_state.get("selector_id") == "-- New Project (Manual) --":
     col_id1, col_id2 = st.columns([4, 8])
     with col_id1: st.selectbox("Project ID:", opciones_id, key="selector_id", on_change=al_cambiar_id)
-    with col_id2: id_final = st.text_input("Manual ID:", key="id_manual")
+    with col_id2: id_final = st.text_input("Manual ID:", key="id_manual", autocomplete="off")
 else:
     st.selectbox("Project ID:", opciones_id, key="selector_id", on_change=al_cambiar_id)
     id_final = st.session_state.get("selector_id")
 
 st.markdown(f"<div class='info-box-blue'><b>Project Name (DB):</b> {st.session_state.get('proj_name', '')}</div>", unsafe_allow_html=True)
 
-col_inp1, col_inp2, col_inp3 = st.columns([0.6, 8.4, 3])
-with col_inp1:
+col_inp1, col_inp2, col_inp3 = st.columns([8.4, 0.6, 3])
+with col_inp1: 
+    val_ref = st.text_input("Reference (Editable):", value=st.session_state.get('ref_text', ''), key="ref_text", autocomplete="off")
+with col_inp2:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
     if st.button("🔄", key="res_ref", type="tertiary", help="Restore Reference"): 
         st.session_state.ref_text = st.session_state.get('proj_name', '')
         st.rerun()
-with col_inp2: 
-    val_ref = st.text_input("Reference (Editable):", value=st.session_state.get('ref_text', ''), key="ref_text", autocomplete="off")
 with col_inp3: 
     val_prop = st.selectbox("Proposal (Version):", st.session_state.get('opciones_rev', ["Original"]), key="rev_seleccionada")
 
-val_sec = st.text_area("Sections / Key Notes:", value=st.session_state.get('sec_text', ''), key="sec_text", height=68)
+val_sec = st.text_area("Sections / Key Notes:", value=st.session_state.get('sec_text', ''), key="sec_text", height=68, autocomplete="off")
 
-col_d1, col_d2, col_d3, col_d4, col_d5, col_d6, col_d7 = st.columns([0.6, 1.5, 0.6, 1.5, 0.6, 1.5, 3.7])
-with col_d1:
+col_d1, col_d2, col_d3, col_d4, col_d5, col_d6, col_d7 = st.columns([1.5, 0.6, 1.5, 0.6, 1.5, 0.6, 2.7])
+with col_d1: val_date = st.date_input("Proposal Date:", value=to_safe_date(st.session_state.get('prop_date')), key="prop_date")
+with col_d2:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
     if st.button("🔄", key="res_d1", type="tertiary"): st.session_state.prop_date = datetime.today().date(); st.rerun()
-with col_d2: val_date = st.date_input("Proposal Date:", value=to_safe_date(st.session_state.get('prop_date')), key="prop_date")
 
-with col_d3:
+with col_d3: val_inv_date = st.date_input("Invitation Date:", value=to_safe_date(st.session_state.get('inv_date')), key="inv_date")
+with col_d4:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
     if st.button("🔄", key="res_d2", type="tertiary"): st.session_state.inv_date = get_defaults_db(id_final)[1]; st.rerun()
-with col_d4: val_inv_date = st.date_input("Invitation Date:", value=to_safe_date(st.session_state.get('inv_date')), key="inv_date")
 
-with col_d5:
+with col_d5: val_comp_date = st.date_input("Compliance Date:", value=to_safe_date(st.session_state.get('comp_date')), key="comp_date")
+with col_d6:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
     if st.button("🔄", key="res_d3", type="tertiary"): st.session_state.comp_date = get_defaults_db(id_final)[2]; st.rerun()
-with col_d6: val_comp_date = st.date_input("Compliance Date:", value=to_safe_date(st.session_state.get('comp_date')), key="comp_date")
 
 st.divider()
 
@@ -544,12 +544,12 @@ for i, bid in enumerate(st.session_state.bids_list):
     type_idx = type_options.index(bid['type']) if bid['type'] in type_options else 0
     bid['type'] = c1.selectbox("Type", type_options, index=type_idx, key=f"b_t_{bid['id']}")
     
-    bid['name'] = c2.text_input("Description", value=bid['name'], key=f"b_n_{bid['id']}")
+    bid['name'] = c2.text_input("Description", value=bid['name'], key=f"b_n_{bid['id']}", autocomplete="off")
     
     if f"b_a_{bid['id']}" not in st.session_state: 
         st.session_state[f"b_a_{bid['id']}"] = bid['amount_str']
     
-    c3.text_input("Amount ($)", key=f"b_a_{bid['id']}", on_change=format_currency_callback, args=(f"b_a_{bid['id']}",))
+    c3.text_input("Amount ($)", key=f"b_a_{bid['id']}", on_change=format_currency_callback, args=(f"b_a_{bid['id']}",), autocomplete="off")
     bid['amount_str'] = st.session_state[f"b_a_{bid['id']}"]
     
     if bid['type'] in ["SUBTOTAL", "TOTAL"]:
@@ -601,10 +601,10 @@ for i, bid in enumerate(st.session_state.bids_list):
         child_type_idx = child_type_options.index(child['type']) if child['type'] in child_type_options else 0
         child['type'] = cc1.selectbox("Alt. Type", child_type_options, index=child_type_idx, key=f"c_t_{child['id']}")
         
-        child['name'] = cc2.text_input("Alt. Description", value=child['name'], key=f"c_n_{child['id']}")
+        child['name'] = cc2.text_input("Alt. Description", value=child['name'], key=f"c_n_{child['id']}", autocomplete="off")
         
         if f"c_a_{child['id']}" not in st.session_state: st.session_state[f"c_a_{child['id']}"] = child['amount_str']
-        cc3.text_input("Alt. Amount ($)", key=f"c_a_{child['id']}", on_change=format_currency_callback, args=(f"c_a_{child['id']}",))
+        cc3.text_input("Alt. Amount ($)", key=f"c_a_{child['id']}", on_change=format_currency_callback, args=(f"c_a_{child['id']}",), autocomplete="off")
         child['amount_str'] = st.session_state[f"c_a_{child['id']}"]
             
         if cc4.button("🗑️", key=f"rem_c_{child['id']}"): bid['children'].pop(j); st.rerun()
@@ -668,7 +668,7 @@ for i, mat in enumerate(st.session_state.mat_list):
     st.markdown("<div class='mat-box'>", unsafe_allow_html=True)
     
     cm1, cm2, cm3 = st.columns([4, 4, 1])
-    mat['item_name'] = cm1.text_input("1. Proposed Item Name (e.g., Building 4):", value=mat.get('item_name', ''), key=f"m_in_{mat['id']}")
+    mat['item_name'] = cm1.text_input("1. Proposed Item Name (e.g., Building 4):", value=mat.get('item_name', ''), key=f"m_in_{mat['id']}", autocomplete="off")
     
     mat_options = ["-- New Material --"] + lista_portafolio
     mat_idx = mat_options.index(mat['mat_name']) if mat['mat_name'] in mat_options else 0
@@ -703,7 +703,7 @@ for i, mat in enumerate(st.session_state.mat_list):
         st.rerun()
 
     if mat_sel == "-- New Material --":
-        mat['mat_name'] = cm2.text_input("New Material Name:", value=mat['mat_name'], key=f"m_n_{mat['id']}")
+        mat['mat_name'] = cm2.text_input("New Material Name:", value=mat['mat_name'], key=f"m_n_{mat['id']}", autocomplete="off")
     else:
         mat['mat_name'] = mat_sel
 
@@ -759,9 +759,9 @@ for i, mat in enumerate(st.session_state.mat_list):
 
         with c_in:
             if multiline:
-                val = st.text_area(label, key=val_key, height=68, on_change=attr_change_callback, args=(val_key, u_key, t_key, db_v, db_u, db_t, chk_key, False))
+                val = st.text_area(label, key=val_key, height=68, on_change=attr_change_callback, args=(val_key, u_key, t_key, db_v, db_u, db_t, chk_key, False), autocomplete="off")
             else:
-                val = st.text_input(label, key=val_key, on_change=attr_change_callback, args=(val_key, u_key, t_key, db_v, db_u, db_t, chk_key, is_decimal))
+                val = st.text_input(label, key=val_key, on_change=attr_change_callback, args=(val_key, u_key, t_key, db_v, db_u, db_t, chk_key, is_decimal), autocomplete="off")
         
         if u_list:
             with c_u:
@@ -815,10 +815,10 @@ for i, mat in enumerate(st.session_state.mat_list):
         cs1, cs2, cs3, cs4, cs_space = st.columns([3, 1.5, 1.5, 0.5, 3])
         
         vis = "visible" if k == 0 else "collapsed"
-        scope['desc'] = cs1.text_input("Description (e.g., Fascias):", value=scope['desc'], key=f"sc_d_{scope['id']}", label_visibility=vis, placeholder="e.g., Fascias")
+        scope['desc'] = cs1.text_input("Description (e.g., Fascias):", value=scope['desc'], key=f"sc_d_{scope['id']}", label_visibility=vis, placeholder="e.g., Fascias", autocomplete="off")
         
         if f"sc_q_{scope['id']}" not in st.session_state: st.session_state[f"sc_q_{scope['id']}"] = scope['qty']
-        cs2.text_input("Scope (Qty):", key=f"sc_q_{scope['id']}", label_visibility=vis, on_change=format_currency_callback, args=(f"sc_q_{scope['id']}",))
+        cs2.text_input("Scope (Qty):", key=f"sc_q_{scope['id']}", label_visibility=vis, on_change=format_currency_callback, args=(f"sc_q_{scope['id']}",), autocomplete="off")
         scope['qty'] = st.session_state[f"sc_q_{scope['id']}"]
         
         scope['unit'] = cs3.selectbox("Units:", U_SCOPE, index=U_SCOPE.index(scope['unit']) if scope['unit'] in U_SCOPE else 0, key=f"sc_u_{scope['id']}", label_visibility=vis)
@@ -834,7 +834,7 @@ for i, mat in enumerate(st.session_state.mat_list):
 
     st.markdown("<br>", unsafe_allow_html=True)
     cp3, _ = st.columns([4, 6])
-    mat['colors'] = cp3.text_input("Color(s):", value=mat['colors'], key=f"m_co_{mat['id']}")
+    mat['colors'] = cp3.text_input("Color(s):", value=mat['colors'], key=f"m_co_{mat['id']}", autocomplete="off")
 
     df_sist = st.session_state.df_sist
     sistemas_disp = df_sist[df_sist['Material'] == mat['mat_name']]['System'].tolist() if not df_sist.empty else []
@@ -860,54 +860,77 @@ for i, mat in enumerate(st.session_state.mat_list):
                 m['sys_sel'] = val
                 if val not in ["-- New System --", "-- None --"]:
                     try:
-                        m['diagram'] = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
+                        diag_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
+                        m['diagram'] = diag_val if pd.notna(diag_val) and diag_val != "" else "-- None --"
                     except:
                         m['diagram'] = "-- None --"
                 else:
                     m['diagram'] = "-- None --"
-                    m['sys_new'] = ""
+                    
+                m['sys_new'] = val if val not in ["-- New System --", "-- None --"] else ""
                 
                 st.session_state[f"s_d_{m_id}"] = m['diagram']
-                db_diag_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == m['sys_new'])]['Diagram'].iloc[0] if not df_sist.empty and m['sys_new'] in df_sist['System'].values else ""
-                st.session_state[f"def_diag_{m_id}"] = (m['diagram'] == db_diag_val) and (db_diag_val != "")
+                
+                db_diag_val = ""
+                if val not in ["-- New System --", "-- None --"]:
+                    try:
+                        db_diag_val = df_sist[(df_sist['Material'] == m['mat_name']) & (df_sist['System'] == val)]['Diagram'].iloc[0]
+                    except: pass
+                
+                is_default = (m['diagram'] == db_diag_val) and (db_diag_val != "") and (db_diag_val != "-- None --")
+                st.session_state[f"def_diag_{m_id}"] = is_default
                 break
 
     sys_sel = c_sys1.selectbox("System:", sys_options, index=sys_idx, key=f"s_sel_{mat['id']}", on_change=sys_change_callback, args=(f"s_sel_{mat['id']}", mat['id']))
 
     if mat['sys_sel'] == "-- New System --":
-        mat['sys_new'] = c_sys2.text_input("System Name:", value=mat['sys_new'], key=f"s_n_{mat['id']}", placeholder="Type new system...")
+        mat['sys_new'] = c_sys2.text_input("System Name:", value=mat['sys_new'], key=f"s_n_{mat['id']}", placeholder="Type new system...", autocomplete="off")
     else:
         mat['sys_new'] = mat['sys_sel']
         c_sys2.text_input("System Name:", value=mat['sys_sel'], disabled=True, key=f"s_n_dis_{mat['id']}")
         
-    idx_diag = diagramas_disp.index(mat['diagram']) if mat['diagram'] in diagramas_disp else 0
-    
-    def diag_change_callback(k_val, d_v, chk_key):
+    def diag_change_callback(k_val, d_v, chk_key, m_id):
         val = st.session_state.get(k_val, "")
-        st.session_state[chk_key] = (val == d_v) and (d_v != "")
+        st.session_state[chk_key] = (val == d_v) and (d_v != "") and (d_v != "-- None --")
+        for m in st.session_state.mat_list:
+            if m['id'] == m_id:
+                m['diagram'] = val
+                break
         
-    def reset_diag_callback(k_val, d_v, chk_key):
-        st.session_state[k_val] = d_v
-        st.session_state[chk_key] = (d_v != "")
+    def reset_diag_callback(k_val, d_v, chk_key, m_id):
+        st.session_state[k_val] = d_v if d_v else "-- None --"
+        st.session_state[chk_key] = (d_v != "") and (d_v != "-- None --")
+        for m in st.session_state.mat_list:
+            if m['id'] == m_id:
+                m['diagram'] = st.session_state[k_val]
+                break
 
-    db_diag = df_sist[(df_sist['Material'] == mat['mat_name']) & (df_sist['System'] == mat['sys_new'])]['Diagram'].iloc[0] if not df_sist.empty and mat['sys_new'] in df_sist['System'].values else ""
+    db_diag = ""
+    if mat['sys_new'] and not df_sist.empty and mat['sys_new'] in df_sist['System'].values:
+        try:
+            db_diag = df_sist[(df_sist['Material'] == mat['mat_name']) & (df_sist['System'] == mat['sys_new'])]['Diagram'].iloc[0]
+        except: pass
+    
     chk_diag_key = f"def_diag_{mat['id']}"
     
-    if f"s_d_{mat['id']}" not in st.session_state: st.session_state[f"s_d_{mat['id']}"] = mat['diagram']
-    if chk_diag_key not in st.session_state: st.session_state[chk_diag_key] = (st.session_state[f"s_d_{mat['id']}"] == db_diag) and (db_diag != "")
+    if f"s_d_{mat['id']}" not in st.session_state: 
+        st.session_state[f"s_d_{mat['id']}"] = mat['diagram']
+        
+    if chk_diag_key not in st.session_state: 
+        st.session_state[chk_diag_key] = (st.session_state[f"s_d_{mat['id']}"] == db_diag) and (db_diag != "") and (db_diag != "-- None --")
 
-    mat['diagram'] = c_sys3.selectbox("Diagram:", diagramas_disp, key=f"s_d_{mat['id']}", on_change=diag_change_callback, args=(f"s_d_{mat['id']}", db_diag, chk_diag_key))
+    mat['diagram'] = c_sys3.selectbox("Diagram:", diagramas_disp, key=f"s_d_{mat['id']}", on_change=diag_change_callback, args=(f"s_d_{mat['id']}", db_diag, chk_diag_key, mat['id']))
     
     with c_btn1:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        st.button("🔄", key=f"ref_diag_{mat['id']}", type="tertiary", on_click=reset_diag_callback, args=(f"s_d_{mat['id']}", db_diag, chk_diag_key))
+        st.button("🔄", key=f"ref_diag_{mat['id']}", type="tertiary", on_click=reset_diag_callback, args=(f"s_d_{mat['id']}", db_diag, chk_diag_key, mat['id']))
         
     with c_btn2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         mat['def_diag'] = st.checkbox("💾", key=chk_diag_key)
 
     c_note, _ = st.columns([6, 4])
-    mat['custom_note'] = c_note.text_area("Custom Notes (Optional):", value=mat.get('custom_note', ''), height=68, key=f"m_cn_{mat['id']}", placeholder="Enter notes here. Use '-' for bullets.")
+    mat['custom_note'] = c_note.text_area("Custom Notes (Optional):", value=mat.get('custom_note', ''), height=68, key=f"m_cn_{mat['id']}", placeholder="Enter notes here. Use '-' for bullets.", autocomplete="off")
     st.markdown("</div>", unsafe_allow_html=True)
 
 st.button("➕ Add New Material", on_click=add_material, type="primary")
@@ -945,7 +968,7 @@ def render_cond(cols, label, key_val, db_v, is_select=False, options=None):
     if is_select:
         val = c1.selectbox(label, options, key=key_val, on_change=cond_change_callback, args=(key_val, db_v, chk_key, False))
     else:
-        val = c1.text_input(label, key=key_val, on_change=cond_change_callback, args=(key_val, db_v, chk_key, False))
+        val = c1.text_input(label, key=key_val, on_change=cond_change_callback, args=(key_val, db_v, chk_key, False), autocomplete="off")
     
     with c2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
@@ -1006,7 +1029,7 @@ if calc_opt == "Y":
         st.session_state.val_calcs = st.session_state.calc_val_input
         st.session_state[chk_calc_key] = check_calc_match(st.session_state.val_calcs, db_val_calcs)
 
-    c_calc2.text_input("Amount ($):", key="calc_val_input", on_change=on_calc_val_change)
+    c_calc2.text_input("Amount ($):", key="calc_val_input", on_change=on_calc_val_change, autocomplete="off")
 else:
     c_calc2.text_input("Amount ($):", value="N/A", disabled=True, key="calc_val_disabled")
     st.session_state.val_calcs = "N"
@@ -1049,7 +1072,7 @@ with c_exec3:
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.markdown("📝 **General Notes:**")
-st.session_state.gen_notes = st.text_area("General Notes (Optional):", value=st.session_state.get('gen_notes', ''), height=100, placeholder="Enter general notes here. Use '-' for bullets.")
+st.session_state.gen_notes = st.text_area("General Notes (Optional):", value=st.session_state.get('gen_notes', ''), height=100, placeholder="Enter general notes here. Use '-' for bullets.", autocomplete="off")
 
 st.divider()
 
