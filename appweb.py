@@ -12,6 +12,7 @@ import platform
 import subprocess
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+import streamlit.components.v1 as components
 
 # ==========================================
 # 0. GESTIÓN DE SECRETOS Y SEGURIDAD
@@ -980,7 +981,7 @@ def_tax = render_cond(cols_r1[8:11], "Sales Tax:", 'val_tax', db_val_tax, True, 
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-cols_r2 = st.columns([1, 1.5, 0.6, 0.6, 0.5, 1.5, 0.6, 0.6, 2.1], gap="small")
+cols_r2 = st.columns([1.5, 1, 0.6, 0.6, 0.5, 1.5, 0.6, 0.6, 2.1], gap="small")
 
 c_calc1, c_calc2, c_calc3, c_calc4 = cols_r2[0:4]
 
@@ -1013,7 +1014,7 @@ def on_calc_opt_change():
                 st.session_state.calc_val_input = ""
     st.session_state[chk_calc_key] = check_calc_match(st.session_state.val_calcs, db_val_calcs)
 
-calc_opt = c_calc1.selectbox("Calcs:", ["Y", "N"], index=0 if is_calcs_y else 1, key="calc_opt", on_change=on_calc_opt_change)
+calc_opt = c_calc1.selectbox("Offer Calcs (Add-on):", ["Y", "N"], index=0 if is_calcs_y else 1, key="calc_opt", on_change=on_calc_opt_change)
 
 if calc_opt == "Y":
     if "calc_val_input" not in st.session_state:
@@ -1024,9 +1025,9 @@ if calc_opt == "Y":
         st.session_state.val_calcs = st.session_state.calc_val_input
         st.session_state[chk_calc_key] = check_calc_match(st.session_state.val_calcs, db_val_calcs)
 
-    c_calc2.text_input("Amount ($):", key="calc_val_input", on_change=on_calc_val_change, autocomplete="off")
+    c_calc2.text_input("Add Amount ($):", key="calc_val_input", on_change=on_calc_val_change, autocomplete="off")
 else:
-    c_calc2.text_input("Amount ($):", value="N/A", disabled=True, key="calc_val_disabled")
+    c_calc2.text_input("Add Amount ($):", value="N/A", disabled=True, key="calc_val_disabled")
     st.session_state.val_calcs = "N"
 
 with c_calc3:
@@ -1293,7 +1294,7 @@ if btn_save or btn_save_gen:
                             'materiales': [],
                             'invitation_date': val_inv_date.strftime("%m/%d/%Y") if val_inv_date else "",
                             'compliance_date': val_comp_date.strftime("%m/%d/%Y") if val_comp_date else "",
-                            'texto_calcs': f"Included (${current_calc_final})" if current_calc_final != "N" else "Not Included",
+                            'texto_calcs': f"If CALCS needed ADD ${current_calc_final}" if current_calc_final != "N" else "Not Included",
                             'texto_mockup': "Included" if st.session_state['val_mock'] == "Y" else "Not Included",
                             'validity': st.session_state['val_validity'],
                             'exec_limit': val_exec.strftime("%m/%d/%Y") if val_exec else "",
@@ -1421,6 +1422,19 @@ if btn_save or btn_save_gen:
                     st.error("❌ Required libraries for document generation are missing.")
                 except Exception as e:
                     st.error(f"❌ Error generating document: {e}")
+
+            # Auto-scroll al final de la página
+            components.html(
+                """
+                <script>
+                    var main = window.parent.document.querySelector('section.main');
+                    if (main) {
+                        main.scrollTop = main.scrollHeight;
+                    }
+                </script>
+                """,
+                height=0
+            )
 
         except Exception as e: 
             st.error(f"Error saving: {e}")
