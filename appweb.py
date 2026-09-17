@@ -12,7 +12,6 @@ import platform
 import subprocess
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-import streamlit.components.v1 as components
 
 # ==========================================
 # 0. GESTIÓN DE SECRETOS Y SEGURIDAD
@@ -1267,6 +1266,12 @@ if btn_save or btn_save_gen:
             # GENERACIÓN DE DOCUMENTOS (NUBE / LOCAL)
             # ==========================================
             if btn_save_gen:
+                
+                def escape_xml(text):
+                    if not isinstance(text, str):
+                        return text
+                    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                
                 try:
                     from docxtpl import DocxTemplate, InlineImage
                     from docx.shared import Mm
@@ -1286,39 +1291,39 @@ if btn_save or btn_save_gen:
                             
                         context = {
                             'proposal_date': val_date.strftime("%B %d, %Y"),
-                            'attention': val_attention,
-                            'customer': val_customer,
-                            'reference': val_ref,
-                            'sections': st.session_state.get('sec_text', ''),
+                            'attention': escape_xml(val_attention),
+                            'customer': escape_xml(val_customer),
+                            'reference': escape_xml(val_ref),
+                            'sections': escape_xml(st.session_state.get('sec_text', '')),
                             'bids': [],
                             'materiales': [],
-                            'invitation_date': val_inv_date.strftime("%m/%d/%Y") if val_inv_date else "",
-                            'compliance_date': val_comp_date.strftime("%m/%d/%Y") if val_comp_date else "",
-                            'texto_calcs': f"If CALCS needed ADD ${current_calc_final}" if current_calc_final != "N" else "Not Included",
+                            'invitation_date': val_inv_date.strftime("%B %d, %Y") if val_inv_date else "",
+                            'compliance_date': val_comp_date.strftime("%B %d, %Y") if val_comp_date else "",
+                            'texto_calcs': f"If CALCS needed ADD ${format_currency(current_calc_final)}" if current_calc_final != "N" else "Not Included",
                             'texto_mockup': "Included" if st.session_state['val_mock'] == "Y" else "Not Included",
                             'validity': st.session_state['val_validity'],
-                            'exec_limit': val_exec.strftime("%m/%d/%Y") if val_exec else "",
+                            'exec_limit': val_exec.strftime("%B %d, %Y") if val_exec else "",
                             'texto_tax': "Included" if st.session_state['val_tax'] == "Y" else "Not Included",
-                            'notas_generales': [n.strip().lstrip('-').strip() for n in st.session_state.get('gen_notes', '').split('\n') if n.strip()],
+                            'notas_generales': [escape_xml(n.strip().lstrip('-').strip()) for n in st.session_state.get('gen_notes', '').split('\n') if n.strip()],
                         }
                         
                         for b in st.session_state.bids_list:
                             if b['name'].strip():
-                                context['bids'].append({'descripcion': f"{b['type']}: {b['name']}", 'precio': f"${b['amount_str']}"})
+                                context['bids'].append({'descripcion': escape_xml(b['name']), 'precio': f"${format_currency(b['amount_str'])}"})
                                 for c in b['children']:
                                     if c['name'].strip():
-                                        context['bids'].append({'descripcion': f"   {c['type']}: {c['name']}", 'precio': f"${c['amount_str']}"})
+                                        context['bids'].append({'descripcion': escape_xml(f"   {c['name']}"), 'precio': f"${format_currency(c['amount_str'])}"})
                                         
                         doc = DocxTemplate(template_path)
                         
                         for m in st.session_state.mat_list:
                             if m['mat_name'].strip():
                                 mat_data = {
-                                    'item_name': m['item_name'],
-                                    'item_name_str': m['item_name'],
+                                    'item_name': escape_xml(m['item_name']),
+                                    'item_name_str': escape_xml(m['item_name']),
                                     'fluid_title_and_scope': "",
                                     'detalles': [],
-                                    'notas': [n.strip().lstrip('-').strip() for n in m.get('custom_note', '').split('\n') if n.strip()],
+                                    'notas': [escape_xml(n.strip().lstrip('-').strip()) for n in m.get('custom_note', '').split('\n') if n.strip()],
                                     'imagen': "" 
                                 }
                                 
@@ -1345,17 +1350,25 @@ if btn_save or btn_save_gen:
                                 if m.get('t_spec') and m.get('spec'): parts.append(m['spec'])
                                 fluid_title = " - ".join(parts).strip()
                                 
-                                scopes_str = ", ".join([f"{s['desc']}: {s['qty']} {s['unit']}" for s in m['scopes']])
-                                mat_data['fluid_title_and_scope'] = f"{fluid_title} ({scopes_str})"
+                                if len(m['scopes']) == 1 and m['scopes'][0]['desc'].strip().lower() == 'general':
+                                    scopes_str = f"{format_currency(m['scopes'][0]['qty'])} {m['scopes'][0]['unit']}"
+                                else:
+                                    scopes_str = ", ".join([f"{escape_xml(s['desc'])} {format_currency(s['qty'])} {s['unit']}" for s in m['scopes']])
                                 
-                                if m.get('thick'): mat_data['detalles'].append(f"Thickness: {format_fluid_unit(m['thick'], m['u_thick'])}")
-                                if m.get('spec'): mat_data['detalles'].append(f"Specification: {m['spec']}")
-                                if m.get('brands'): mat_data['detalles'].append(f"Brands: {m['brands']}")
-                                if m.get('colors'): mat_data['detalles'].append(f"Colors: {m['colors']}")
-                                if m.get('sys_sel') and m.get('sys_sel') not in ["-- None --", "-- New System --"]: 
-                                    mat_data['detalles'].append(f"System: {m['sys_sel']}")
-                                elif m.get('sys_new'):
-                                    mat_data['detalles'].append(f"System: {m['sys_new']}")
+                                mat_data['fluid_title_and_scope'] = f"{escape_xml(fluid_title)} scope: {scopes_str}"
+                                
+                                if m.get('thick') and not m.get('t_thick'): 
+                                    mat_data['detalles'].append(f"Thickness: {escape_xml(format_fluid_unit(m['thick'], m['u_thick']))}")
+                                if m.get('spec') and not m.get('t_spec'): 
+                                    mat_data['detalles'].append(f"Specification: {escape_xml(m['spec'])}")
+                                if m.get('brands'): 
+                                    mat_data['detalles'].append(f"Brands: {escape_xml(m['brands'])}")
+                                if m.get('colors'): 
+                                    mat_data['detalles'].append(f"Colors: {escape_xml(m['colors'])}")
+                                
+                                sys_val = m.get('sys_sel') if m.get('sys_sel') not in ["-- None --", "-- New System --", ""] else m.get('sys_new')
+                                if sys_val and sys_val not in ["-- None --", "-- New System --", ""]:
+                                    mat_data['detalles'].append(f"System: {escape_xml(sys_val)}")
                                     
                                 context['materiales'].append(mat_data)
                         
@@ -1422,19 +1435,6 @@ if btn_save or btn_save_gen:
                     st.error("❌ Required libraries for document generation are missing.")
                 except Exception as e:
                     st.error(f"❌ Error generating document: {e}")
-
-            # Auto-scroll al final de la página
-            components.html(
-                """
-                <script>
-                    var main = window.parent.document.querySelector('section.main');
-                    if (main) {
-                        main.scrollTop = main.scrollHeight;
-                    }
-                </script>
-                """,
-                height=0
-            )
 
         except Exception as e: 
             st.error(f"Error saving: {e}")
