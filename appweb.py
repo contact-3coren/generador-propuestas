@@ -101,13 +101,20 @@ def conectar_sheets(retries=3):
             creds = get_credentials()
             gc = gspread.authorize(creds)
             
-            ws_maestra = gc.open_by_url("https://docs.google.com/spreadsheets/d/1xepmy2zalJNVYdI24vMFDi-k6FkOuXG_CXY0e592WmI/edit").worksheet("CONSOLIDADO")
+            # NUEVA BASE DE DATOS
+            wb_maestra_v2 = gc.open_by_url("https://docs.google.com/spreadsheets/d/1t53N6Czx0LXd4G1Ol-Q77jMCcbN4Yl3Nb-GC3z3UkXo/edit")
+            ws_proyectos = wb_maestra_v2.worksheet("PROYECTOS_MAESTRO")
+            ws_bids_const = wb_maestra_v2.worksheet("BIDS_CONSTRUCTORAS")
+            ws_maestro_gc = wb_maestra_v2.worksheet("MAESTRO_GC")
+            
+            # BASE DE DATOS DE PROPUESTAS (Se mantiene igual)
             wb_propuestas = gc.open_by_url("https://docs.google.com/spreadsheets/d/1pKwuuH64uC34kiAb0QIIIxf2j2VEWC7MWCWRXf6rbis/edit")
             
             try: ws_cond = wb_propuestas.worksheet("Condiciones")
             except: ws_cond = wb_propuestas.add_worksheet(title="Condiciones", rows="100", cols="10")
             
-            return (ws_maestra, wb_propuestas.worksheet("General"), wb_propuestas.worksheet("Bids"), 
+            return (ws_proyectos, ws_bids_const, ws_maestro_gc, 
+                    wb_propuestas.worksheet("General"), wb_propuestas.worksheet("Bids"), 
                     wb_propuestas.worksheet("Materials"), wb_propuestas.worksheet("Portafolio"), 
                     wb_propuestas.worksheet("Sistemas"), ws_cond)
         except Exception as e:
@@ -117,16 +124,21 @@ def conectar_sheets(retries=3):
                 st.stop()
 
 try:
-    ws_maestra, ws_gen, ws_bids, ws_mat, ws_port, ws_sist, ws_cond = conectar_sheets()
+    ws_proyectos, ws_bids_const, ws_maestro_gc, ws_gen, ws_bids, ws_mat, ws_port, ws_sist, ws_cond = conectar_sheets()
 except Exception as e:
     st.stop()
 
 def fetch_all_data(retries=3):
     for attempt in range(retries):
         try:
-            return (pd.DataFrame(ws_maestra.get_all_records()), pd.DataFrame(ws_gen.get_all_records()),
-                    pd.DataFrame(ws_bids.get_all_records()), pd.DataFrame(ws_mat.get_all_records()),
-                    pd.DataFrame(ws_port.get_all_records()), pd.DataFrame(ws_sist.get_all_records()),
+            return (pd.DataFrame(ws_proyectos.get_all_records()), 
+                    pd.DataFrame(ws_bids_const.get_all_records()),
+                    pd.DataFrame(ws_maestro_gc.get_all_records()),
+                    pd.DataFrame(ws_gen.get_all_records()),
+                    pd.DataFrame(ws_bids.get_all_records()), 
+                    pd.DataFrame(ws_mat.get_all_records()),
+                    pd.DataFrame(ws_port.get_all_records()), 
+                    pd.DataFrame(ws_sist.get_all_records()),
                     pd.DataFrame(ws_cond.get_all_records()))
         except Exception as e:
             if attempt < retries - 1: time.sleep(2)
@@ -137,8 +149,15 @@ def fetch_all_data(retries=3):
 def cargar_datos_si_necesario():
     if 'df_maestra' not in st.session_state or 'df_cond' not in st.session_state:
         dfs = fetch_all_data()
-        st.session_state.df_maestra, st.session_state.df_historial, st.session_state.df_bids = dfs[0], dfs[1], dfs[2]
-        st.session_state.df_mat, st.session_state.df_port, st.session_state.df_sist, st.session_state.df_cond = dfs[3], dfs[4], dfs[5], dfs[6]
+        st.session_state.df_maestra = dfs[0]
+        st.session_state.df_bids_const = dfs[1]
+        st.session_state.df_maestro_gc = dfs[2]
+        st.session_state.df_historial = dfs[3]
+        st.session_state.df_bids = dfs[4]
+        st.session_state.df_mat = dfs[5]
+        st.session_state.df_port = dfs[6]
+        st.session_state.df_sist = dfs[7]
+        st.session_state.df_cond = dfs[8]
 
 cargar_datos_si_necesario()
 
@@ -216,17 +235,6 @@ def format_fluid_unit(val, unit):
     if unit == "feet": return f"{val} ft"
     return f"{val} {unit}"
 
-def extraer_clientes_avanzado(texto_col_h):
-    clientes = {}
-    if not texto_col_h: return clientes
-    matches = re.findall(r'\[(.*?)\]:\s*([^\n\[]+)', str(texto_col_h))
-    for comp, ems in matches:
-        comp = comp.strip()
-        em_list = [e.strip() for e in ems.split(',') if e.strip()]
-        if comp not in clientes: clientes[comp] = set()
-        clientes[comp].update(em_list)
-    return {k: sorted(list(v)) for k, v in clientes.items()}
-
 def validar_email(email):
     if not email or email == "-- Empty --" or email == "-- Type Manually --": return True
     return re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email) is not None
@@ -257,9 +265,9 @@ opciones_id = ["-- New Project (Manual) --"] + lista_ids
 
 def get_defaults_db(id_sel):
     fila_m = st.session_state.df_maestra[st.session_state.df_maestra['ID_Proyecto'] == id_sel].iloc[0] if id_sel in ids_maestra else {}
-    name = str(fila_m.get('Proyecto_Nombre', '')) if fila_m is not {} else ""
-    inv = to_safe_date(fila_m.get('Fecha_invitación', '')) if fila_m is not {} else datetime.today().date()
-    comp = to_safe_date(fila_m.get('Fecha_última_modificación', '')) if fila_m is not {} else datetime.today().date()
+    name = str(fila_m.get('Nombre_Proyecto', '')) if fila_m is not {} else ""
+    inv = to_safe_date(fila_m.get('Fecha_Creacion_ID', '')) if fila_m is not {} else datetime.today().date()
+    comp = datetime.today().date()
     return name, inv, comp
 
 def al_cambiar_id():
@@ -298,6 +306,7 @@ def al_cambiar_id():
     
     st.session_state.cliente_selector = "-- Select --"
     st.session_state.cliente_editable = ""
+    st.session_state.simplified_name = ""
     st.session_state.attention = ""
     for i in range(1, 5): st.session_state[f"e{i}_sel"] = "-- Empty --"; st.session_state[f"e{i}_man"] = ""
     
@@ -335,14 +344,29 @@ def al_cambiar_id():
             st.session_state.comp_date = to_safe_date(fila_h.get('Compliance Date', comp_db))
             
             cliente_db = buscar_dato(fila_h, 'customer')
-            fila_m = st.session_state.df_maestra[st.session_state.df_maestra['ID_Proyecto'] == id_sel].iloc[0] if id_sel in ids_maestra else {}
-            clientes_dict = extraer_clientes_avanzado(fila_m.get('Contactos_Envío', '')) if fila_m is not {} else {}
             
-            st.session_state.cliente_selector = cliente_db if cliente_db in clientes_dict else "-- New (Manual) --"
+            df_bc = st.session_state.df_bids_const
+            bids_for_proj = df_bc[df_bc['ID_Proyecto'] == id_sel] if not df_bc.empty else pd.DataFrame()
+            lista_nombres_clientes = bids_for_proj['Nombre_Constructora'].dropna().unique().tolist()
+            
+            st.session_state.cliente_selector = cliente_db if cliente_db in lista_nombres_clientes else "-- New (Manual) --"
             st.session_state.cliente_editable = cliente_db
             st.session_state.attention = buscar_dato(fila_h, 'attention')
             
-            emails_base = clientes_dict.get(cliente_db, [])
+            # Cargar Simplified Name si existe
+            df_mgc = st.session_state.df_maestro_gc
+            if st.session_state.cliente_selector not in ["-- Select --", "-- New (Manual) --"] and not df_mgc.empty:
+                mgc_row = df_mgc[df_mgc['Nombre_Oficial'] == st.session_state.cliente_selector].iloc[0] if st.session_state.cliente_selector in df_mgc['Nombre_Oficial'].values else None
+                st.session_state.simplified_name = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
+            
+            emails_base = []
+            if st.session_state.cliente_selector not in ["-- Select --", "-- New (Manual) --"] and not bids_for_proj.empty:
+                gc_row = bids_for_proj[bids_for_proj['Nombre_Constructora'] == st.session_state.cliente_selector].iloc[0]
+                contactos_str = str(gc_row.get('Contactos', ''))
+                emails_base = re.findall(r'<([^>]+)>', contactos_str)
+                if not emails_base:
+                    emails_base = [e.strip() for e in contactos_str.split(',') if '@' in e]
+            
             for i in range(1, 5):
                 em_val = buscar_dato(fila_h, f'email {i}')
                 if em_val:
@@ -479,28 +503,58 @@ st.divider()
 # 6. INTERFAZ - CLIENTE
 # ==========================================
 st.markdown("### 2. Customer & Emails")
-fila_m = st.session_state.df_maestra[st.session_state.df_maestra['ID_Proyecto'] == id_final].iloc[0] if id_final in ids_maestra else {}
-clientes_dict = extraer_clientes_avanzado(fila_m.get('Contactos_Envío', '')) if fila_m is not {} else {}
 
-st.info(f"**Bidding Instructions (DB):**\n{str(fila_m.get('Instrucciones', 'No instructions')) if fila_m is not {} else 'N/A'}")
+df_bc = st.session_state.df_bids_const
+bids_for_proj = df_bc[df_bc['ID_Proyecto'] == id_final] if not df_bc.empty else pd.DataFrame()
+
+instrucciones = "No instructions"
+if not bids_for_proj.empty:
+    inst_list = bids_for_proj['Instrucciones_Envio'].dropna().astype(str).unique().tolist()
+    inst_list = [i for i in inst_list if i.strip()]
+    if inst_list:
+        instrucciones = "\n".join(inst_list)
+        
+st.info(f"**Bidding Instructions (DB):**\n{instrucciones}")
 
 col_cli1, col_cli2 = st.columns(2)
 with col_cli1:
-    lista_nombres_clientes = ["-- Select --", "-- New (Manual) --"] + list(clientes_dict.keys())
+    lista_nombres_clientes = ["-- Select --", "-- New (Manual) --"] + bids_for_proj['Nombre_Constructora'].dropna().unique().tolist()
     
     def al_cambiar_constructora():
         sel = st.session_state.get('cliente_selector', '-- Select --')
         st.session_state.cliente_editable = sel if sel not in ["-- Select --", "-- New (Manual) --"] else ""
         st.session_state.attention = ""
         for i in range(1, 5): st.session_state[f"e{i}_sel"] = "-- Empty --"; st.session_state[f"e{i}_man"] = ""
+        
+        df_mgc = st.session_state.df_maestro_gc
+        if sel not in ["-- Select --", "-- New (Manual) --"] and not df_mgc.empty:
+            mgc_row = df_mgc[df_mgc['Nombre_Oficial'] == sel].iloc[0] if sel in df_mgc['Nombre_Oficial'].values else None
+            st.session_state.simplified_name = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
+        else:
+            st.session_state.simplified_name = ""
 
     sel_cust = st.selectbox("General Contractor:", lista_nombres_clientes, key="cliente_selector", on_change=al_cambiar_constructora)
     
     val_customer = st.text_input("Final Name to Use:", value=st.session_state.get('cliente_editable',''), key="cliente_editable", autocomplete="off")
+    
+    col_simp1, col_simp2 = st.columns([8, 2])
+    with col_simp1:
+        val_simplified = st.text_input("Simplified Name (For Filename):", value=st.session_state.get('simplified_name', ''), key="simplified_name", autocomplete="off")
+    with col_simp2:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        def_simplified = st.checkbox("💾", key="def_simplified", help="Save as default for this GC in DB")
+        
     val_attention = st.text_input("Attention:", value=st.session_state.get('attention', ''), key="attention", autocomplete="off")
 
 with col_cli2:
-    emails_base = clientes_dict.get(sel_cust, [])
+    emails_base = []
+    if sel_cust not in ["-- Select --", "-- New (Manual) --"] and not bids_for_proj.empty:
+        gc_row = bids_for_proj[bids_for_proj['Nombre_Constructora'] == sel_cust].iloc[0]
+        contactos_str = str(gc_row.get('Contactos', ''))
+        emails_base = re.findall(r'<([^>]+)>', contactos_str)
+        if not emails_base:
+            emails_base = [e.strip() for e in contactos_str.split(',') if '@' in e]
+            
     def get_opciones(usados): return ["-- Empty --", "-- Type Manually --"] + [e for e in emails_base if e not in usados]
     
     e1_sel = st.selectbox("Email 1 (Main):", get_opciones([]), key="e1_sel")
@@ -695,6 +749,20 @@ for i, mat in enumerate(st.session_state.mat_list):
             mat['sys_sel'] = "-- New System --"
             mat['sys_new'] = ""
             mat['diagram'] = "-- None --"
+            
+            # FIX: Forzar actualización en session_state para que se refleje de inmediato
+            st.session_state[f"thick_{mat['id']}"] = mat['thick']
+            st.session_state[f"u_thick_{mat['id']}"] = mat['u_thick']
+            st.session_state[f"t_thick_{mat['id']}"] = mat['t_thick']
+            st.session_state[f"spec_{mat['id']}"] = mat['spec']
+            st.session_state[f"t_spec_{mat['id']}"] = mat['t_spec']
+            st.session_state[f"width_{mat['id']}"] = mat['width']
+            st.session_state[f"u_width_{mat['id']}"] = mat['u_width']
+            st.session_state[f"t_width_{mat['id']}"] = mat['t_width']
+            st.session_state[f"length_{mat['id']}"] = mat['length']
+            st.session_state[f"u_length_{mat['id']}"] = mat['u_length']
+            st.session_state[f"t_length_{mat['id']}"] = mat['t_length']
+            st.session_state[f"brands_{mat['id']}"] = mat['brands']
             
             if f"s_d_{mat['id']}" in st.session_state: del st.session_state[f"s_d_{mat['id']}"]
             if f"def_diag_{mat['id']}" in st.session_state: del st.session_state[f"def_diag_{mat['id']}"]
@@ -1125,6 +1193,18 @@ if btn_save or btn_save_gen:
     else:
         try:
             with st.spinner("Saving to database..."):
+                
+                # 0. GUARDAR SIMPLIFIED NAME EN MAESTRO_GC
+                if def_simplified and sel_cust not in ["-- Select --", "-- New (Manual) --"]:
+                    try:
+                        cell = ws_maestro_gc.find(sel_cust, in_column=1)
+                        if cell:
+                            ws_maestro_gc.update_cell(cell.row, 2, val_simplified)
+                        else:
+                            ws_maestro_gc.append_row([sel_cust, val_simplified, "", "", ""])
+                    except Exception as e:
+                        print(f"Error saving simplified name: {e}")
+
                 # 1. GENERAL
                 registros_gen = ws_gen.get_all_records()
                 filas_borrar_gen = [idx for idx, r in enumerate(registros_gen, start=2) if str(r.get('ID', '')) == id_final and str(r.get('Proposal', '')) == val_prop and str(r.get('Customer', '')) == val_customer]
@@ -1256,8 +1336,15 @@ if btn_save or btn_save_gen:
                 
                 # Refrescar los datos en memoria
                 dfs = fetch_all_data()
-                st.session_state.df_maestra, st.session_state.df_historial, st.session_state.df_bids = dfs[0], dfs[1], dfs[2]
-                st.session_state.df_mat, st.session_state.df_port, st.session_state.df_sist, st.session_state.df_cond = dfs[3], dfs[4], dfs[5], dfs[6]
+                st.session_state.df_maestra = dfs[0]
+                st.session_state.df_bids_const = dfs[1]
+                st.session_state.df_maestro_gc = dfs[2]
+                st.session_state.df_historial = dfs[3]
+                st.session_state.df_bids = dfs[4]
+                st.session_state.df_mat = dfs[5]
+                st.session_state.df_port = dfs[6]
+                st.session_state.df_sist = dfs[7]
+                st.session_state.df_cond = dfs[8]
                 
                 st.success(f"✅ Proposal saved successfully in Database!")
                 st.toast("✅ Proposal saved successfully!", icon="✅")
@@ -1374,15 +1461,15 @@ if btn_save or btn_save_gen:
                         
                         doc.render(context)
                         
-                        # Lógica de nombres
-                        if str(id_final).startswith("2026"):
-                            base_id = str(id_final).replace("2026", "3COREN", 1)
-                        else:
-                            base_id = f"3COREN - {str(id_final)}"
-                            
-                        safe_id = re.sub(r'[\\/*?:"<>|]', "", base_id).strip()
+                        # Lógica de nombres de archivo
+                        safe_id = re.sub(r'[\\/*?:"<>|]', "", str(id_final)).strip()
                         safe_prop = re.sub(r'[\\/*?:"<>|]', "", str(val_prop)).strip()
-                        base_filename = f"{safe_id} - {safe_prop}"
+                        safe_simplified = re.sub(r'[\\/*?:"<>|]', "", val_simplified).strip()
+                        
+                        if safe_simplified:
+                            base_filename = f"3COREN - {safe_simplified} - {safe_id} - {safe_prop}"
+                        else:
+                            base_filename = f"3COREN - {safe_id} - {safe_prop}"
                         
                         docx_filepath = os.path.join(temp_dir, f"{base_filename}.docx")
                         pdf_filepath = os.path.join(temp_dir, f"{base_filename}.pdf")
