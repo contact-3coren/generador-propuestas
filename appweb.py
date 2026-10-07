@@ -126,6 +126,7 @@ def conectar_sheets(retries=3):
 try:
     ws_proyectos, ws_bids_const, ws_maestro_gc, ws_gen, ws_bids, ws_mat, ws_port, ws_sist, ws_cond = conectar_sheets()
 except Exception as e:
+    st.error(f"🚨 Error crítico al conectar con Google Sheets: {e}")
     st.stop()
 
 def fetch_all_data(retries=3):
@@ -507,14 +508,20 @@ st.markdown("### 2. Customer & Emails")
 df_bc = st.session_state.df_bids_const
 bids_for_proj = df_bc[df_bc['ID_Proyecto'] == id_final] if not df_bc.empty else pd.DataFrame()
 
+# --- LÓGICA DE INSTRUCCIONES POR CONSTRUCTORA ---
+sel_cust_actual = st.session_state.get('cliente_selector', '-- Select --')
 instrucciones = "No instructions"
-if not bids_for_proj.empty:
-    inst_list = bids_for_proj['Instrucciones_Envio'].dropna().astype(str).unique().tolist()
-    inst_list = [i for i in inst_list if i.strip()]
-    if inst_list:
-        instrucciones = "\n".join(inst_list)
-        
-st.info(f"**Bidding Instructions (DB):**\n{instrucciones}")
+
+if sel_cust_actual not in ["-- Select --", "-- New (Manual) --"] and not bids_for_proj.empty:
+    gc_row = bids_for_proj[bids_for_proj['Nombre_Constructora'] == sel_cust_actual]
+    if not gc_row.empty:
+        inst_val = str(gc_row.iloc[0].get('Instrucciones_Envio', '')).strip()
+        if inst_val and inst_val.lower() != 'nan':
+            instrucciones = inst_val
+            
+nombre_mostrar = sel_cust_actual if sel_cust_actual not in ['-- Select --', '-- New (Manual) --'] else 'selected GC'
+st.info(f"**Bidding Instructions for {nombre_mostrar}:**\n{instrucciones}")
+# ------------------------------------------------
 
 col_cli1, col_cli2 = st.columns(2)
 with col_cli1:
