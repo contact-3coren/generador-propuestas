@@ -101,13 +101,11 @@ def conectar_sheets(retries=3):
             creds = get_credentials()
             gc = gspread.authorize(creds)
             
-            # NUEVA BASE DE DATOS
             wb_maestra_v2 = gc.open_by_url("https://docs.google.com/spreadsheets/d/1t53N6Czx0LXd4G1Ol-Q77jMCcbN4Yl3Nb-GC3z3UkXo/edit")
             ws_proyectos = wb_maestra_v2.worksheet("PROYECTOS_MAESTRO")
             ws_bids_const = wb_maestra_v2.worksheet("BIDS_CONSTRUCTORAS")
             ws_maestro_gc = wb_maestra_v2.worksheet("MAESTRO_GC")
             
-            # BASE DE DATOS DE PROPUESTAS (Se mantiene igual)
             wb_propuestas = gc.open_by_url("https://docs.google.com/spreadsheets/d/1pKwuuH64uC34kiAb0QIIIxf2j2VEWC7MWCWRXf6rbis/edit")
             
             try: ws_cond = wb_propuestas.worksheet("Condiciones")
@@ -120,7 +118,7 @@ def conectar_sheets(retries=3):
         except Exception as e:
             if attempt < retries - 1: time.sleep(2)
             else:
-                st.error(f"Error connecting to Sheets: {e}")
+                st.error(f"🚨 Error crítico al conectar con Google Sheets: {e}")
                 st.stop()
 
 try:
@@ -268,7 +266,20 @@ def get_defaults_db(id_sel):
     fila_m = st.session_state.df_maestra[st.session_state.df_maestra['ID_Proyecto'] == id_sel].iloc[0] if id_sel in ids_maestra else {}
     name = str(fila_m.get('Nombre_Proyecto', '')) if fila_m is not {} else ""
     inv = to_safe_date(fila_m.get('Fecha_Creacion_ID', '')) if fila_m is not {} else datetime.today().date()
+    
     comp = datetime.today().date()
+    if id_sel in ids_maestra and not st.session_state.df_bids_const.empty:
+        df_bc = st.session_state.df_bids_const
+        bids_proj = df_bc[df_bc['ID_Proyecto'] == id_sel]
+        if not bids_proj.empty:
+            fechas = pd.to_datetime(bids_proj['Fecha_Ultimo_Addendum'], errors='coerce').dropna()
+            if not fechas.empty:
+                comp = fechas.max().date()
+            else:
+                fechas_inv = pd.to_datetime(bids_proj['Fecha_Primera_Invitacion'], errors='coerce').dropna()
+                if not fechas_inv.empty:
+                    comp = fechas_inv.max().date()
+                    
     return name, inv, comp
 
 def al_cambiar_id():
@@ -308,6 +319,8 @@ def al_cambiar_id():
     st.session_state.cliente_selector = "-- Select --"
     st.session_state.cliente_editable = ""
     st.session_state.simplified_name = ""
+    st.session_state.db_simplified_name = ""
+    st.session_state.def_simplified = False
     st.session_state.attention = ""
     for i in range(1, 5): st.session_state[f"e{i}_sel"] = "-- Empty --"; st.session_state[f"e{i}_man"] = ""
     
@@ -322,6 +335,11 @@ def al_cambiar_id():
     else:
         st.session_state.val_validity = "30"; st.session_state.val_calcs = "N"; st.session_state.val_mock = "N"; st.session_state.val_tax = "N"
         st.session_state.val_exec = datetime.today().date()
+
+    # Inicializar Calcs para proyecto nuevo
+    val_c_init = st.session_state.val_calcs
+    st.session_state.calc_opt = "Y" if (val_c_init != "N" and val_c_init != "") else "N"
+    st.session_state.calc_val_input = format_currency(val_c_init) if val_c_init != "N" else ""
 
     if id_sel and id_sel != "-- New Project (Manual) --":
         df_h = st.session_state.df_historial
@@ -358,7 +376,12 @@ def al_cambiar_id():
             df_mgc = st.session_state.df_maestro_gc
             if st.session_state.cliente_selector not in ["-- Select --", "-- New (Manual) --"] and not df_mgc.empty:
                 mgc_row = df_mgc[df_mgc['Nombre_Oficial'] == st.session_state.cliente_selector].iloc[0] if st.session_state.cliente_selector in df_mgc['Nombre_Oficial'].values else None
-                st.session_state.simplified_name = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
+                db_simp = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
+            else:
+                db_simp = ""
+            st.session_state.db_simplified_name = db_simp
+            st.session_state.simplified_name = db_simp
+            st.session_state.def_simplified = (db_simp != "")
             
             emails_base = []
             if st.session_state.cliente_selector not in ["-- Select --", "-- New (Manual) --"] and not bids_for_proj.empty:
@@ -382,8 +405,12 @@ def al_cambiar_id():
             st.session_state.val_mock = str(buscar_dato(fila_h, 'mock up')) or st.session_state.val_mock
             st.session_state.val_tax = str(buscar_dato(fila_h, 'sales tax')) or st.session_state.val_tax
             
-            st.session_state.val_calcs = str(buscar_dato(fila_h, 'calcs')) or st.session_state.val_calcs
-            st.session_state.calc_val_input = format_currency(st.session_state.val_calcs) if st.session_state.val_calcs != "N" else ""
+            # Cargar Calcs correctamente
+            val_c = str(buscar_dato(fila_h, 'calcs'))
+            if not val_c: val_c = st.session_state.val_calcs
+            st.session_state.val_calcs = val_c
+            st.session_state.calc_opt = "Y" if (val_c != "N" and val_c != "") else "N"
+            st.session_state.calc_val_input = format_currency(val_c) if val_c != "N" else ""
             
             df_b = st.session_state.df_bids
             if not df_b.empty:
@@ -474,29 +501,33 @@ with col_inp1:
     val_ref = st.text_input("Reference (Editable):", value=st.session_state.get('ref_text', ''), key="ref_text", autocomplete="off")
 with col_inp2:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-    if st.button("🔄", key="res_ref", type="tertiary", help="Restore Reference"): 
-        st.session_state.ref_text = st.session_state.get('proj_name', '')
-        st.rerun()
+    def reset_ref(): st.session_state.ref_text = st.session_state.get('proj_name', '')
+    st.button("🔄", key="res_ref", type="tertiary", help="Restore Reference", on_click=reset_ref)
 with col_inp3: 
     val_prop = st.selectbox("Proposal (Version):", st.session_state.get('opciones_rev', ["Original"]), key="rev_seleccionada")
 
 val_sec = st.text_area("Sections / Key Notes:", value=st.session_state.get('sec_text', ''), key="sec_text", height=68)
 
 col_d1, col_d2, col_d3, col_d4, col_d5, col_d6, col_d7 = st.columns([1.5, 0.6, 1.5, 0.6, 1.5, 0.6, 2.7])
+
+def reset_prop_date(): st.session_state.prop_date = datetime.today().date()
+def reset_inv_date(proj_id): st.session_state.inv_date = get_defaults_db(proj_id)[1]
+def reset_comp_date(proj_id): st.session_state.comp_date = get_defaults_db(proj_id)[2]
+
 with col_d1: val_date = st.date_input("Proposal Date:", value=to_safe_date(st.session_state.get('prop_date')), key="prop_date")
 with col_d2:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-    if st.button("🔄", key="res_d1", type="tertiary"): st.session_state.prop_date = datetime.today().date(); st.rerun()
+    st.button("🔄", key="res_d1", type="tertiary", on_click=reset_prop_date)
 
 with col_d3: val_inv_date = st.date_input("Invitation Date:", value=to_safe_date(st.session_state.get('inv_date')), key="inv_date")
 with col_d4:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-    if st.button("🔄", key="res_d2", type="tertiary"): st.session_state.inv_date = get_defaults_db(id_final)[1]; st.rerun()
+    st.button("🔄", key="res_d2", type="tertiary", on_click=reset_inv_date, args=(id_final,))
 
 with col_d5: val_comp_date = st.date_input("Compliance Date:", value=to_safe_date(st.session_state.get('comp_date')), key="comp_date")
 with col_d6:
     st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-    if st.button("🔄", key="res_d3", type="tertiary"): st.session_state.comp_date = get_defaults_db(id_final)[2]; st.rerun()
+    st.button("🔄", key="res_d3", type="tertiary", on_click=reset_comp_date, args=(id_final,))
 
 st.divider()
 
@@ -536,20 +567,41 @@ with col_cli1:
         df_mgc = st.session_state.df_maestro_gc
         if sel not in ["-- Select --", "-- New (Manual) --"] and not df_mgc.empty:
             mgc_row = df_mgc[df_mgc['Nombre_Oficial'] == sel].iloc[0] if sel in df_mgc['Nombre_Oficial'].values else None
-            st.session_state.simplified_name = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
+            db_simp = str(mgc_row['Sinonimo_1']) if mgc_row is not None else ""
         else:
-            st.session_state.simplified_name = ""
+            db_simp = ""
+        st.session_state.db_simplified_name = db_simp
+        st.session_state.simplified_name = db_simp
+        st.session_state.def_simplified = (db_simp != "")
 
     sel_cust = st.selectbox("General Contractor:", lista_nombres_clientes, key="cliente_selector", on_change=al_cambiar_constructora)
     
     val_customer = st.text_input("Final Name to Use:", value=st.session_state.get('cliente_editable',''), key="cliente_editable", autocomplete="off")
     
-    col_simp1, col_simp2 = st.columns([8, 2])
+    # --- LÓGICA DE SIMPLIFIED NAME ---
+    col_simp1, col_simp2, col_simp3 = st.columns([7, 1.5, 1.5])
+    db_simp = st.session_state.get('db_simplified_name', '')
+    
+    def simp_change_callback():
+        val = st.session_state.simplified_name
+        st.session_state.def_simplified = (val == db_simp) and (db_simp != "")
+
+    def reset_simp_callback():
+        st.session_state.simplified_name = db_simp
+        st.session_state.def_simplified = (db_simp != "")
+
+    if 'def_simplified' not in st.session_state:
+        st.session_state.def_simplified = (st.session_state.get('simplified_name', '') == db_simp) and (db_simp != "")
+
     with col_simp1:
-        val_simplified = st.text_input("Simplified Name (For Filename):", value=st.session_state.get('simplified_name', ''), key="simplified_name", autocomplete="off")
+        val_simplified = st.text_input("Simplified Name (For Filename):", key="simplified_name", on_change=simp_change_callback, autocomplete="off")
     with col_simp2:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+        st.button("🔄", key="ref_simp", type="tertiary", on_click=reset_simp_callback)
+    with col_simp3:
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         def_simplified = st.checkbox("💾", key="def_simplified", help="Save as default for this GC in DB")
+    # ---------------------------------
         
     val_attention = st.text_input("Attention:", value=st.session_state.get('attention', ''), key="attention", autocomplete="off")
 
@@ -757,7 +809,6 @@ for i, mat in enumerate(st.session_state.mat_list):
             mat['sys_new'] = ""
             mat['diagram'] = "-- None --"
             
-            # FIX: Forzar actualización en session_state para que se refleje de inmediato
             st.session_state[f"thick_{mat['id']}"] = mat['thick']
             st.session_state[f"u_thick_{mat['id']}"] = mat['u_thick']
             st.session_state[f"t_thick_{mat['id']}"] = mat['t_thick']
@@ -1062,7 +1113,6 @@ c_calc1, c_calc2, c_calc3, c_calc4 = cols_r2[0:4]
 if "val_calcs" not in st.session_state:
     st.session_state.val_calcs = db_val_calcs
 
-is_calcs_y = st.session_state.val_calcs != "N" and str(st.session_state.val_calcs).strip() != ""
 chk_calc_key = "def_calcs"
 
 def check_calc_match(current, db_val):
@@ -1078,22 +1128,18 @@ if chk_calc_key not in st.session_state:
     st.session_state[chk_calc_key] = check_calc_match(st.session_state.val_calcs, db_val_calcs)
 
 def on_calc_opt_change():
-    opt = st.session_state.get("calc_opt", "N")
+    opt = st.session_state.calc_opt
     if opt == "N":
         st.session_state.val_calcs = "N"
     else:
         if st.session_state.val_calcs == "N":
             st.session_state.val_calcs = ""
-            if "calc_val_input" in st.session_state:
-                st.session_state.calc_val_input = ""
+            st.session_state.calc_val_input = ""
     st.session_state[chk_calc_key] = check_calc_match(st.session_state.val_calcs, db_val_calcs)
 
-calc_opt = c_calc1.selectbox("Offer Calcs (Add-on):", ["Y", "N"], index=0 if is_calcs_y else 1, key="calc_opt", on_change=on_calc_opt_change)
+calc_opt = c_calc1.selectbox("Offer Calcs (Add-on):", ["Y", "N"], key="calc_opt", on_change=on_calc_opt_change)
 
 if calc_opt == "Y":
-    if "calc_val_input" not in st.session_state:
-        st.session_state.calc_val_input = format_currency(st.session_state.val_calcs) if st.session_state.val_calcs != "N" else ""
-
     def on_calc_val_change():
         format_currency_callback("calc_val_input")
         st.session_state.val_calcs = st.session_state.calc_val_input
@@ -1113,8 +1159,7 @@ with c_calc3:
             st.session_state.calc_val_input = format_currency(db_val_calcs)
         else:
             st.session_state.calc_opt = "N"
-            if "calc_val_input" in st.session_state:
-                st.session_state.calc_val_input = ""
+            st.session_state.calc_val_input = ""
         st.session_state[chk_calc_key] = check_calc_match(db_val_calcs, db_val_calcs)
     st.button("🔄", key="ref_calcs", type="tertiary", on_click=reset_calcs)
 
@@ -1202,7 +1247,7 @@ if btn_save or btn_save_gen:
             with st.spinner("Saving to database..."):
                 
                 # 0. GUARDAR SIMPLIFIED NAME EN MAESTRO_GC
-                if def_simplified and sel_cust not in ["-- Select --", "-- New (Manual) --"]:
+                if st.session_state.get('def_simplified') and sel_cust not in ["-- Select --", "-- New (Manual) --"]:
                     try:
                         cell = ws_maestro_gc.find(sel_cust, in_column=1)
                         if cell:
